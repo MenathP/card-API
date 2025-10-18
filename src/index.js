@@ -1,20 +1,36 @@
-const dotenv = require('dotenv');
-dotenv.config(); // <-- Add this line at the very top
-
+require('dotenv').config();
 const express = require('express');
+const cors = require('cors');
 const dbConnect = require('./config/dbConnect');
+const authroutes = require('./routes/authRoutes');
+const userRoutes = require('./routes/userRoutes');
+const recordRoutes = require('./routes/recordRoutes');
+const fileRoutes = require('./routes/fileRoutes');
+const meRoutes = require('./routes/meRoutes');
 
 dbConnect();
 
 const app = express();
-
-//middleware
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 
-//routs 
+// Health check
+app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
-//start server
-const PORT = process.env.PORT || 7002;
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+app.use('/api/auth', authroutes);
+app.use('/api/users', userRoutes);
+app.use('/api/records', recordRoutes);
+app.use('/api/files', fileRoutes);
+app.use('/api/me', meRoutes);
+
+// 404
+app.use((req, res) => res.status(404).json({ error: 'Not found' }));
+
+// Error handler
+app.use((err, _req, res, _next) => {
+  console.error('Unhandled error:', err);
+  res.status(500).json({ error: 'Server error' });
 });
+
+const PORT = process.env.PORT || 7001;
+app.listen(PORT, () => console.log(`API running on port ${PORT}`));

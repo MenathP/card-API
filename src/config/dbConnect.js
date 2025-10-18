@@ -2,14 +2,15 @@ const mongoose = require('mongoose');
 
 const dbConnect = async () => {
     try {
-        await mongoose.connect(process.env.CONNECTION_STRING, {
-            useNewUrlParser: true,
-            useUnifiedTopology: true,
-        });
-        console.log("Database connected successfully");
-    } catch (error) {
-        console.error("Database connection failed:", error);
+        const uri = process.env.CONNECTION_STRING;
+        if (!uri) {
+        console.error('Missing CONNECTION_STRING');
         process.exit(1);
+        }
+        await mongoose.connect(uri, { serverSelectionTimeoutMS: 15000 });
+        console.log('Database connected');
+    } catch (e) {
+        console.error('Database connection failed:', e.message);
     }
 };
 
