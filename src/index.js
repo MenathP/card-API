@@ -14,6 +14,13 @@ const app = express();
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 
+// Serve uploaded files
+app.use('/uploads', express.static('uploads'));
+
+// Scan route (business card image -> extraction)
+const scanRoutes = require('./routes/scanRoutes');
+app.use('/api', scanRoutes);
+
 // Health check
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
