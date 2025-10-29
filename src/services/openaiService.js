@@ -2,8 +2,8 @@ const fs = require('fs');
 const OpenAI = require('openai');
 const { recognize } = require('tesseract.js');
 
-// Use env-based key if present; otherwise falls back to placeholder.
-const OPENAI_KEY = process.env.OPENAI_KEY || process.env.OPENAI_API_KEY || 'sk-REPLACE_WITH_YOUR_OPENAI_KEY_HERE';
+// Read API key only from environment. Do NOT hard-code keys in source.
+const OPENAI_KEY = process.env.OPENAI_KEY || process.env.OPENAI_API_KEY;
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-3.5-turbo';
 const client = new OpenAI({ apiKey: OPENAI_KEY });
 
@@ -14,8 +14,8 @@ async function runOcr(filePath) {
 }
 
 async function extractCardFromImage(filePath) {
-  if (!OPENAI_KEY || OPENAI_KEY.startsWith('sk-REPLACE')) {
-    throw new Error('OpenAI API key not configured in code or .env');
+  if (!OPENAI_KEY) {
+    throw new Error('OpenAI API key not configured. Set OPENAI_KEY or OPENAI_API_KEY in your environment.');
   }
 
   if (!fs.existsSync(filePath)) throw new Error('file not found: ' + filePath);
