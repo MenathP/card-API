@@ -1,7 +1,7 @@
 const express = require('express');
 const multer = require('multer');
 const path = require('path');
-const { processScan } = require('../controllers/scanController');
+const { processScan, processLocalScan } = require('../controllers/scanController');
 
 const router = express.Router();
 
@@ -21,5 +21,9 @@ const upload = multer({ storage });
 
 // POST /api/scan - accepts form-data with field `image`
 router.post('/scan', upload.single('image'), processScan);
+
+// POST /api/scan/local - accepts JSON { filename: 'uploads/xxxx.jpg' }
+// This helper is temporary for testing server-side files already present in uploads/
+router.post('/scan/local', express.json(), processLocalScan);
 
 module.exports = router;
