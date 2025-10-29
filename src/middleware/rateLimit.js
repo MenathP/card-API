@@ -12,7 +12,8 @@ const loginLimiter = rateLimit({
 const codeLoginLimiter = rateLimit({
   windowMs: 10 * 60 * 1000, // 10 min
   max: 30,
-  keyGenerator: (req) => req.body?.code || req.ip,
+  // Prefer request body code, fallback to X-Forwarded-For or socket remote address
+  keyGenerator: (req) => req.body?.code || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.connection?.remoteAddress || '',
   message: { error: 'Too many attempts, try again later.' },
   standardHeaders: true,
   legacyHeaders: false

@@ -1,63 +1,62 @@
 const fs = require('fs');
 const OpenAI = require('openai');
+const { recognize } = require('tesseract.js');
 
-// NOTE: Do NOT commit your OpenAI API key. Set OPENAI_API_KEY in your local .env
-if (!process.env.OPENAI_API_KEY) {
-  console.warn('OPENAI_API_KEY is not set. Set it in .env to enable card extraction.');
+// Use env-based key if present; otherwise falls back to placeholder.
+const OPENAI_KEY = process.env.OPENAI_KEY || process.env.OPENAI_API_KEY || 'sk-REPLACE_WITH_YOUR_OPENAI_KEY_HERE';
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-3.5-turbo';
+const client = new OpenAI({ apiKey: OPENAI_KEY });
+
+async function runOcr(filePath) {
+  // Use the high-level recognize API which is compatible across tesseract.js versions
+  const res = await recognize(filePath, 'eng', { logger: () => {} });
+  return (res && res.data && res.data.text) ? res.data.text : '';
 }
 
-const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-/**
- * extractCardFromImage(filePath)
- * - Reads image file, calls OpenAI to extract structured fields.
- * - Returns object: { name, title, phones: [], emails: [], website }
- *
- * Important: this is a template implementation using the OpenAI Responses API.
- * Depending on the model availability you may need to change model name to a
- * vision-capable model (e.g., a GPT-4o-vision family model) or perform OCR first.
- */
 async function extractCardFromImage(filePath) {
-  if (!process.env.OPENAI_API_KEY) {
-    // Return a helpful error to the API client instead of throwing key leak info
-    throw new Error('OpenAI API key not configured on server');
+  if (!OPENAI_KEY || OPENAI_KEY.startsWith('sk-REPLACE')) {
+    throw new Error('OpenAI API key not configured in code or .env');
   }
 
-  const imageBytes = fs.readFileSync(filePath);
-  const b64 = imageBytes.toString('base64');
+  if (!fs.existsSync(filePath)) throw new Error('file not found: ' + filePath);
 
-  // Build a strong prompt instructing the model to parse the business card.
-  // The Responses API supports mixed input including images for vision-capable models.
-  const prompt = `Extract the following fields from the business card image exactly as JSON with keys: name, title, phones (array), emails (array), website. If a field is not present, use null or empty array. Respond only with JSON.`;
+  // 1) Run OCR to get text from the image
+  const ocrText = await runOcr(filePath);
+
+  // 2) Build a prompt to extract structured fields from the OCR text
+  const prompt = `You will be given the raw text extracted from a business card. Extract exactly the following JSON object and nothing else with keys: name, title, phones (array), emails (array), website. Use null for missing scalar fields and empty arrays for missing lists. Here is the text:\n\n${ocrText}`;
 
   try {
     const response = await client.responses.create({
-      model: 'gpt-4o-mini-vision', // <-- adjust to a vision-capable model available on your account
-      input: [
-        { role: 'user', content: prompt },
-        // send the image as a data URL -- the SDK/server will handle it for vision models
-        { role: 'user', content: [{ type: 'input_image', image: `data:image/jpeg;base64,${b64}` }] }
-      ],
-      // limit tokens/timeout as appropriate
-      max_output_tokens: 700
+      model: OPENAI_MODEL,
+      input: prompt,
+      max_output_tokens: 700,
     });
 
-    // Responses API returns structured output — try to find JSON in the output
-    const output = response.output ?? response; // fallback
-    const text = (output[0] && output[0].content && output[0].content[0] && output[0].content[0].text) ||
-      JSON.stringify(output);
+    // Try to retrieve text output
+    let textOut = '';
+    if (response.output && Array.isArray(response.output) && response.output.length) {
+      const content = response.output[0].content || [];
+      for (const c of content) {
+        if (c.type === 'output_text' && c.text) {
+          textOut += c.text + '\n';
+        } else if (c.text) {
+          textOut += c.text + '\n';
+        }
+      }
+    } else if (response.output_text) {
+      textOut = response.output_text;
+    } else {
+      textOut = JSON.stringify(response);
+    }
 
-    // Try to parse JSON from returned text
-    const jsonMatch = text.trim();
+    const trimmed = textOut.trim();
     try {
-      const parsed = JSON.parse(jsonMatch);
-      return parsed;
+      return JSON.parse(trimmed);
     } catch (e) {
-      // If not pure JSON, attempt to locate a JSON block inside text
-      const maybe = jsonMatch.match(/\{[\s\S]*\}/);
+      const maybe = trimmed.match(/\{[\s\S]*\}/);
       if (maybe) return JSON.parse(maybe[0]);
-      // last resort: return raw text in `raw` field
-      return { raw: text };
+      return { raw: trimmed, ocrText };
     }
   } catch (err) {
     console.error('OpenAI extract error:', err);
